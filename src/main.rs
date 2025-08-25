@@ -1,4 +1,5 @@
 mod data_model;
+mod parser;
 
 
 fn main() {
