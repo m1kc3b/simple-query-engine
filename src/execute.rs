@@ -1,18 +1,18 @@
-use crate::data_model::{Database, Query, Row};
+use crate::data_model::{Database, Query, Row, Value};
 
 /**
  * The execution engine has been refactored to drastically improve query performance.
- * 
+ *
  * 1. Optimized execution strategy:
- * The engine no longer simply scans the entire table. 
+ * The engine no longer simply scans the entire table.
  * It first checks if an index exists on the column in the condition (`WHERE`).
- * 
+ *
  * 2. Use of indexes:
- * If an index is found, the engine uses it to directly and very quickly access the relevant rows. 
+ * If an index is found, the engine uses it to directly and very quickly access the relevant rows.
  * This avoids the costly "full table scan" and significantly reduces latency.
- * 
+ *
  * 3. Fallback handling:
- * If no index is available for the query column, the engine falls back to the full table scan method. 
+ * If no index is available for the query column, the engine falls back to the full table scan method.
  * This ensures that the query always works, even if it is not optimized.
  */
 pub fn execute_query(query: &Query, db: &Database) -> Result<Vec<Row>, String> {
@@ -44,8 +44,52 @@ pub fn execute_query(query: &Query, db: &Database) -> Result<Vec<Row>, String> {
             // We scan each line and check the condition.
             for row in &table.rows {
                 if let Some(row_value) = row.get_value(&condition.column) {
-                    if *row_value == condition.value {
+                    let row_matches = match condition.operator.as_str() {
+                        "=" => row_value == &condition.value,
+                        "!=" => row_value != &condition.value,
+                        ">" => {
+                            if let (Value::Integer(row_num), Value::Integer(cond_num)) =
+                                (row_value, &condition.value)
+                            {
+                                row_num > cond_num
+                            } else {
+                                false
+                            }
+                        }
+                        "<" => {
+                            if let (Value::Integer(row_num), Value::Integer(cond_num)) =
+                                (row_value, &condition.value)
+                            {
+                                row_num < cond_num
+                            } else {
+                                false
+                            }
+                        }
+                        ">=" => {
+                            if let (Value::Integer(row_num), Value::Integer(cond_num)) =
+                                (row_value, &condition.value)
+                            {
+                                row_num >= cond_num
+                            } else {
+                                false
+                            }
+                        }
+                        "<=" => {
+                            if let (Value::Integer(row_num), Value::Integer(cond_num)) =
+                                (row_value, &condition.value)
+                            {
+                                row_num <= cond_num
+                            } else {
+                                false
+                            }
+                        }
+                        _ => false,
+                    };
+
+                    if row_matches {
                         results.push(row.clone());
+                    } else {
+                        continue;
                     }
                 }
             }
