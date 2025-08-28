@@ -50,7 +50,7 @@ pub fn parse_query(query_str: &str) -> Result<Query, String> {
         } else {
             // Parse in to a number
             match raw_value_str.parse::<i64>() {
-                Ok(num) => Value::Interger(num),
+                Ok(num) => Value::Integer(num),
                 Err(_) => return Err("Impossible to parse this value".to_string()),
             }
         };
