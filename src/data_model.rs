@@ -6,7 +6,7 @@ use std::collections::HashMap;
  * In addition, it makes data comparisons more reliable. 
  * It is simpler and safer to compare two integers than two strings representing numbers.
  */
-#[derive(Debug, Clone)]  
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]  
 pub enum Value {
     Interger(i64),
     Text(String),
@@ -46,11 +46,11 @@ pub struct Database {
 }
 
 // Represents the condition of the query
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Condition {
     pub column: String,
     pub operator: String,
-    pub value: String,
+    pub value: Value,
 }
 
 // Represents the parsed query
