@@ -27,14 +27,16 @@ pub fn execute_query(query: &Query, db: &Database) -> Result<Vec<Row>, String> {
 
     // 3. Handling the WHERE clause
     if let Some(condition) = &query.condition {
-        // Checking if an index exists for the condition
-        if let Some(index) = table.indexes.get(&condition.column) {
-            // Searching for the value in our index
-            if let Some(row_indices) = index.get(&condition.value) {
-                // For each row index found, the corresponding row is retrieved
-                for &row_index in row_indices {
-                    if let Some(row) = table.rows.get(row_index) {
-                        results.push(row.clone());
+        if condition.operator == "=" {
+            // Checking if an index exists for the condition
+            if let Some(index) = table.indexes.get(&condition.column) {
+                // Searching for the value in our index
+                if let Some(row_indices) = index.get(&condition.value) {
+                    // For each row index found, the corresponding row is retrieved
+                    for &row_index in row_indices {
+                        if let Some(row) = table.rows.get(row_index) {
+                            results.push(row.clone());
+                        }
                     }
                 }
             }
@@ -45,7 +47,6 @@ pub fn execute_query(query: &Query, db: &Database) -> Result<Vec<Row>, String> {
             for row in &table.rows {
                 if let Some(row_value) = row.get_value(&condition.column) {
                     let row_matches = match condition.operator.as_str() {
-                        "=" => row_value == &condition.value,
                         "!=" => row_value != &condition.value,
                         ">" => {
                             if let (Value::Integer(row_num), Value::Integer(cond_num)) =
