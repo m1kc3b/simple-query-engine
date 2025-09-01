@@ -1,7 +1,7 @@
-use std::{collections::HashMap, io::{self, Write}};
+use std::{collections::{HashMap, BTreeMap}, io::{self, Write}};
 
 use crate::{
-    data_model::{Database, Row, Table, Value},
+    data_model::{Database, Row, Table, Value, RowId, Index},
     execute::execute_query,
     parser::parse_query,
 };
@@ -11,53 +11,49 @@ mod execute;
 mod parser;
 
 fn main() {
-    // 1. Initialize db
+    // 1. Initialisation de la base de données
     let mut db = Database {
         tables: HashMap::new(),
     };
 
-    let mut users_table = Table {
-        rows: Vec::new(),
-        indexes: HashMap::new(),
-    };
+    // Création de la table "users" avec HashMap<usize, Row> pour les lignes
+    let mut users_table = Table::new();
 
-    // Data for db
-    let mut row1_data = HashMap::new();
-    row1_data.insert("name".to_string(), Value::Text("Alice".to_string()));
-    row1_data.insert("age".to_string(), Value::Integer(30));
-    let row1 = Row { data: row1_data };
+    // 2. Ajout des lignes dans la table
+    let rows_data = vec![
+        ("Alice", 30),
+        ("Bob", 45),
+        ("Charlie", 25),
+    ];
 
-    let mut row2_data = HashMap::new();
-    row2_data.insert("name".to_string(), Value::Text("Bob".to_string()));
-    row2_data.insert("age".to_string(), Value::Integer(45));
-    let row2 = Row { data: row2_data };
+    for (i, (name, age)) in rows_data.iter().enumerate() {
+        let mut data = HashMap::new();
+        data.insert("name".to_string(), Value::Text(name.to_string()));
+        data.insert("age".to_string(), Value::Integer(*age));
+        let row = Row { data };
+        users_table.rows.insert(i as RowId, row);
+    }
 
-    let mut row3_data = HashMap::new();
-    row3_data.insert("name".to_string(), Value::Text("Charlie".to_string()));
-    row3_data.insert("age".to_string(), Value::Integer(25));
-    let row3 = Row { data: row3_data };
-
-    users_table.rows.push(row1.clone());
-    users_table.rows.push(row2.clone());
-    users_table.rows.push(row3.clone());
-
-    // 2. Building the index for column "age"
-    let index_column = "age".to_string();
-    let mut age_index = HashMap::new();
-    for (i, row) in users_table.rows.iter().enumerate() {
-        if let Some(value) = row.data.get(&index_column) {
-            age_index
-                .entry(value.clone())
+    // 3. Construction de l'index pour la colonne "age"
+    let mut age_index_map: BTreeMap<Value, Vec<RowId>> = BTreeMap::new();
+    for (&row_id, row) in users_table.rows.iter() {
+        if let Some(value) = row.get_value("age") {
+            age_index_map.entry(value.clone())
                 .or_insert_with(Vec::new)
-                .push(i);
+                .push(row_id);
         }
     }
-    users_table.indexes.insert(index_column, age_index);
 
-    // Adding the table to the db
+    // On encapsule dans la struct Index
+    users_table.indexes.insert(
+        "age".to_string(),
+        Index { map: age_index_map },
+    );
+
+    // 4. Ajout de la table dans la base
     db.tables.insert("users".to_string(), users_table);
 
-    // 3. Loop on the user queries
+    // 5. Boucle principale pour lire les requêtes de l'utilisateur
     loop {
         print!("> ");
         io::stdout().flush().unwrap();
@@ -69,9 +65,12 @@ fn main() {
             break;
         }
 
+        // Parsing de la requête
         match parse_query(&query) {
             Ok(parsed_query) => {
                 println!("Parsed query : {:#?}", parsed_query);
+
+                // Exécution de la requête
                 match execute_query(&parsed_query, &db) {
                     Ok(results) => {
                         println!("Results found: {} lines", results.len());
