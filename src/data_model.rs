@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 /// - Avoids data copies (an integer is stored instead of an entire Row in the indexes).
 /// - Easy to increment.
 /// - Compact in memory (u64 = 8 bytes).
-pub type RowId = u64;
+pub type RowId = usize;
 
 /// Typed value stored in a column.
 // In a "real" DB, we would have an optimized binary storage engine.
