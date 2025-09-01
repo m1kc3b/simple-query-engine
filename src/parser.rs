@@ -1,69 +1,83 @@
-use crate::data_model::{Condition, Query, Value};
+use crate::data_model::Value;
 
-/**
- * This parser has been refactored to be more flexible and efficient.
- * 
- * 1. Handling of comparison operators: 
- * It can now handle the operators >, <, >=, <=, and != in addition to equality. 
- * This allows for more complex and varied queries.
- * 
- * 2. Data type conversion:
- * The condition value is no longer a String. 
- * It is now converted to a more appropriate data type (`Value::Integer` or `Value::Text`). 
- * This conversion is crucial. 
- * Not only does it allow for precise numeric comparisons (e.g., 'age > 25'), but it also stores the data more efficiently in memory and prepares the ground for indexing
- * 
- * 3. Increased flexibility:
- * Although it is still limited to 'SELECT *', the logic is ready to be extended to handle the selection of specific columns.
- */
-pub fn parse_query(query_str: &str) -> Result<Query, String> {
-    let parts: Vec<&str> = query_str.trim().split_whitespace().collect();
+/// Representation of operators in conditions
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Operator {
+    Eq,    // =
+    Neq,   // !=
+    Gt,    // >
+    Lt,    // <
+    Gte,   // >=
+    Lte,   // <=
+}
 
-    // 1. Basic syntax check
-    if parts.len() < 4 || parts[0].to_uppercase() != "SELECT" || parts[2].to_uppercase() != "FROM" {
-        return Err("Invalid simple SELECT query syntax.".to_string());
+/// WHERE condition
+#[derive(Debug, Clone)]
+pub struct Condition {
+    pub column: String,
+    pub operator: Operator,
+    pub value: Value,
+}
+
+/// Simplified SQL query
+#[derive(Debug, Clone)]
+pub struct Query {
+    pub table_name: String,
+    pub condition: Option<Condition>,
+}
+
+/// Function to parse a value from a string
+fn parse_value(token: &str) -> Result<Value, String> {
+    if let Ok(int_val) = token.parse::<i64>() {
+        Ok(Value::Integer(int_val))
+    } else {
+        // Delete quotes if present
+        let trimmed = token.trim_matches('"').trim_matches('\'');
+        Ok(Value::Text(trimmed.to_string()))
+    }
+}
+
+/// Main parsing function
+pub fn parse_query(sql: &str) -> Result<Query, String> {
+    let tokens: Vec<&str> = sql.split_whitespace().collect();
+
+    // Minimalist verification
+    if tokens.len() < 4 {
+        return Err("Query too short".to_string());
+    }
+    if tokens[0].to_uppercase() != "SELECT" || tokens[1] != "*" || tokens[2].to_uppercase() != "FROM" {
+        return Err("Invalid SELECT syntax".to_string());
     }
 
-    let table_name = parts[3].to_string();
-    let mut condition = None;
+    let table_name = tokens[3].to_string();
 
-    // 2. Handling the WHERE clause
-    if parts.len() > 4 && parts[4].to_uppercase() == "WHERE" {
-        if parts.len() < 8 {
-            return Err("Invalid WHERE clause syntax.".to_string());
+    // Managing the WHERE clause
+    if tokens.len() > 4 && tokens[4].to_uppercase() == "WHERE" {
+        if tokens.len() < 8 {
+            return Err("Incomplete WHERE clause".to_string());
         }
+        let column = tokens[5].to_string();
+        let op_str = tokens[6];
+        let value_str = tokens[7];
 
-        let column = parts[5].to_string();
-        let operator_str = parts[6].to_string();
-
-        // 2a. Validate the operator
-        let supported_operators = ["=", ">", "<", ">=", "<=", "!="];
-        if !supported_operators.contains(&operator_str.as_str()) {
-            return Err(format!("Operator not supported: {}", operator_str));
-        }
-
-        // 2b. Handling values and converting them in to the `enum Value`
-        let raw_value_str = parts[7..].join(" ").trim_matches(';').to_string();
-        let value = if raw_value_str.starts_with('\'') && raw_value_str.ends_with('\'') {
-            // It's a string, removing quotation marks
-            Value::Text(raw_value_str.trim_matches('\'').to_string())
-        } else {
-            // Parse in to a number
-            match raw_value_str.parse::<i64>() {
-                Ok(num) => Value::Integer(num),
-                Err(_) => return Err("Impossible to parse this value".to_string()),
-            }
+        let operator = match op_str {
+            "="  => Operator::Eq,
+            "!=" => Operator::Neq,
+            ">"  => Operator::Gt,
+            "<"  => Operator::Lt,
+            ">=" => Operator::Gte,
+            "<=" => Operator::Lte,
+            _ => return Err(format!("Unknown operator '{}'", op_str)),
         };
-        
-        condition = Some(Condition {
-            column,
-            operator: operator_str,
-            value,
-        });
-    }
 
-    Ok(Query {
-        table_name,
-        condition,
-    })
+        let value = parse_value(value_str)?;
+
+        Ok(Query {
+            table_name,
+            condition: Some(Condition { column, operator, value }),
+        })
+    } else {
+        // No WHERE
+        Ok(Query { table_name, condition: None })
+    }
 }
